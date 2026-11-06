@@ -6,27 +6,23 @@ import {
 import { connectWallet, createPost, deletePost, listPosts, type NewPost, type Post } from './arkiv/api'
 import { POST_LIFETIME_HOURS, ROLES } from './arkiv/schema'
 import Landing from './Landing'
+import { filterBySkill, message, short, timeLeft, validatePost } from './lib'
 
 const ANY = 'any'
 const roleOptions = ROLES.map((r) => ({ value: r, label: r }))
 const filterOptions = [{ value: ANY, label: 'Anyone' }, ...roleOptions]
 const emptyForm: NewPost = { role: 'frontend', lookingFor: 'contracts', name: '', skills: '', note: '', contact: '' }
 
-const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
-
-function timeLeft(seconds: number) {
-  const m = Math.round(seconds / 60)
-  if (m < 1) return 'expiring'
-  if (m < 60) return `${m}m left`
-  return `${Math.floor(m / 60)}h ${m % 60}m left`
-}
-
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 export default function App() {
   const [view, setView] = useState<'landing' | 'app'>(location.hash === '#app' ? 'app' : 'landing')
+  useEffect(() => {
+    const onHash = () => setView(location.hash === '#app' ? 'app' : 'landing')
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   const go = (v: 'landing' | 'app') => {
-    history.replaceState(null, '', v === 'app' ? '#app' : location.pathname + location.search)
+    history.pushState(null, '', v === 'app' ? '#app' : location.pathname + location.search)
     setView(v)
     window.scrollTo(0, 0)
   }
@@ -46,26 +42,34 @@ function Board({ onHome }: { onHome: () => void }) {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      setPosts(await listPosts({ need: need === ANY ? undefined : need, role: role === ANY ? undefined : role }))
-    } catch (e) {
-      setError(message(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [need, role])
+  const [reload, setReload] = useState(0)
+  const refresh = useCallback(() => setReload((n) => n + 1), [])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    let stale = false
+    listPosts({ need: need === ANY ? undefined : need, role: role === ANY ? undefined : role })
+      .then((result) => {
+        if (stale) return
+        setPosts(result)
+        setError(null)
+      })
+      .catch((e) => !stale && setError(message(e)))
+      .finally(() => !stale && setLoading(false))
+    return () => {
+      stale = true
+      setLoading(true)
+    }
+  }, [need, role, reload])
 
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return q ? posts.filter((p) => p.skills.toLowerCase().includes(q)) : posts
-  }, [posts, search])
+  useEffect(() => {
+    const eth = (window as unknown as { ethereum?: { on?: Function; removeListener?: Function } }).ethereum
+    if (!eth?.on) return
+    const onAccounts = (accounts: `0x${string}`[]) => setAccount(accounts[0] ?? null)
+    eth.on('accountsChanged', onAccounts)
+    return () => eth.removeListener?.('accountsChanged', onAccounts)
+  }, [])
+
+  const visible = useMemo(() => filterBySkill(posts, search), [posts, search])
 
   const connect = async () => {
     try {
@@ -78,14 +82,15 @@ function Board({ onHome }: { onHome: () => void }) {
 
   const submit = async () => {
     if (!account) return toast.warning('Connect your wallet first')
-    if (!form.name.trim() || !form.contact.trim()) return toast.warning('Name and contact are required')
+    const problem = validatePost(form)
+    if (problem) return toast.warning(problem)
     setSaving(true)
     try {
       await createPost(account, { ...form, name: form.name.trim(), contact: form.contact.trim() })
       toast.success('Post published', { description: `It disappears in ${POST_LIFETIME_HOURS}h.` })
       setOpen(false)
       setForm(emptyForm)
-      await refresh()
+      refresh()
     } catch (e) {
       toast.error('Could not publish', { description: message(e) })
     } finally {
@@ -99,7 +104,7 @@ function Board({ onHome }: { onHome: () => void }) {
     try {
       await deletePost(account, post.key)
       toast.success('Post deleted')
-      await refresh()
+      refresh()
     } catch (e) {
       toast.error('Could not delete', { description: message(e) })
     } finally {

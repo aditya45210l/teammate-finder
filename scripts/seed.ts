@@ -1,5 +1,6 @@
 import 'dotenv/config'
-import { createWalletClient, ExpirationTime, http } from '@arkiv-network/sdk'
+import { createWalletClient, ExpirationTime } from '@arkiv-network/sdk'
+import { http } from 'viem'
 import { rabdi } from '@arkiv-network/sdk/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 import { addr } from '@arkiv-network/sdk/schema'
