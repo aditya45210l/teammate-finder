@@ -42,10 +42,12 @@ const stack = cva('pouf-stack flex flex-col min-w-0', {
 interface StackProps {
   children: ReactNode
   gap?: Gap
+  /** Fill the parent's height, so a Spacer inside can push content to the bottom. */
+  fill?: boolean
 }
 
-export function Stack({ children, gap }: StackProps) {
-  return <div className={stack({ gap })}>{children}</div>
+export function Stack({ children, gap, fill }: StackProps) {
+  return <div className={fill ? `${stack({ gap })} h-full` : stack({ gap })}>{children}</div>
 }
 
 const row = cva('pouf-row flex flex-row min-w-0', {
@@ -139,9 +141,20 @@ export function Sidebar({
   )
 }
 
-/** Centered page column for marketing screens. */
-export function Page({ children }: { children: ReactNode }) {
-  return <div className="pouf-page max-w-[1120px] mx-auto p-(--s5) max-[620px]:p-(--s3)">{children}</div>
+/** Centered page column for marketing screens. `wide` suits app screens. */
+export function Page({ children, wide }: { children: ReactNode; wide?: boolean }) {
+  return (
+    <div className={`pouf-page ${wide ? 'max-w-[1360px]' : 'max-w-[1120px]'} mx-auto p-(--s5) max-[620px]:p-(--s3)`}>{children}</div>
+  )
+}
+
+/** A fixed-width side column next to flexible content; stacks under 900px. */
+export function Split({ children }: { children: ReactNode }) {
+  return (
+    <div className="pouf-split grid [grid-template-columns:272px_minmax(0,1fr)] gap-(--s6) [align-items:start] max-[900px]:[grid-template-columns:minmax(0,1fr)]">
+      {children}
+    </div>
+  )
 }
 
 /** A named anchor target so navbar links can scroll to it. */

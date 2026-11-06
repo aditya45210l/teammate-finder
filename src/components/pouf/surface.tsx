@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 /* Vertical padding is biased by half the lip on every padded variant: the
  * cushion's floor inset paints INSIDE the box, so symmetric padding reads
  * bottom-heavy. Same total height, optically centred content. */
-const card = cva('pouf-card bg-surface rounded-card cushion-card', {
+const card = cva('pouf-card h-full bg-surface rounded-card cushion-card', {
   variants: {
     variant: {
       default: 'px-(--s7) pt-[calc(var(--s7)-var(--lip)/2)] pb-[calc(var(--s7)+var(--lip)/2)]',

@@ -5,7 +5,7 @@
  * resolves inside this folder. That is what makes the guarantee hold — change a
  * primitive (or a token in pouf.css) and the whole UI changes with it.
  */
-export { Stack, Row, Spacer, Grid, Shell, Sidebar, Page, Section } from './layout'
+export { Stack, Row, Spacer, Grid, Shell, Sidebar, Page, Split, Section } from './layout'
 export { Heading, Highlight, Eyebrow, Text } from './text'
 export { Card, RowCard } from './surface'
 export { Stat, Metric } from './readout'

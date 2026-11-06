@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Avatar, Badge, Blob, Button, Card, Confirm, Dialog, Empty, ErrorNote, Field, Grid, Heading, Input,
-  Row, Select, Separator, Shell, Sidebar, Skeleton, Spacer, Stack, Stat, Text, Textarea, Toaster, TooltipProvider, toast,
+  Navbar, Page, Row, Select, Separator, Sidebar, Split, Skeleton, Spacer, Stack, Stat, Text, Textarea, Toaster, TooltipProvider, toast,
 } from './components/pouf'
 import * as arkiv from './arkiv/api'
 import * as mongo from './mongo/api'
@@ -41,10 +41,10 @@ export default function App() {
     setView(v)
     window.scrollTo(0, 0)
   }
-  return view === 'landing' ? <Landing onLaunch={() => go('app')} /> : <Board onHome={() => go('landing')} />
+  return view === 'landing' ? <Landing onLaunch={() => go('app')} /> : <Board />
 }
 
-function Board({ onHome }: { onHome: () => void }) {
+function Board() {
   const [account, setAccount] = useState<`0x${string}` | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
   const [source, setSource] = useState<Source>(() => {
@@ -190,18 +190,42 @@ function Board({ onHome }: { onHome: () => void }) {
     setSearch('')
   }
 
+  const newPostDialog = (
+              <Dialog
+                open={open}
+                onOpenChange={setOpen}
+                title="New post"
+                description="Tell people who you are and who you need."
+                trigger={<Button tone="pink" size="sm">Post</Button>}
+              >
+                <Stack gap={4}>
+                  <Field label="Your name">{(id) => <Input id={id} value={form.name} onChange={set('name')} />}</Field>
+                  <Row gap={3} wrap={false}>
+                    <Field label="I am a">{(id) => <Select id={id} value={form.role} onChange={set('role')} options={roleOptions} />}</Field>
+                    <Field label="I need a">{(id) => <Select id={id} value={form.lookingFor} onChange={set('lookingFor')} options={roleOptions} />}</Field>
+                  </Row>
+                  <Field label="Skills" hint="Comma separated">{(id) => <Input id={id} value={form.skills} onChange={set('skills')} />}</Field>
+                  <Field label="Note">{(id) => <Textarea id={id} value={form.note} onChange={set('note')} rows={3} />}</Field>
+                  <Field label="Contact" hint="Telegram, email, etc.">{(id) => <Input id={id} value={form.contact} onChange={set('contact')} />}</Field>
+                  <Button tone="mint" block loading={saving} onClick={submit}>
+                    {me ? (demo ? 'Add demo post' : 'Publish') : 'Connect wallet to publish'}
+                  </Button>
+                </Stack>
+              </Dialog>
+  )
+
   return (
     <TooltipProvider>
-      <Shell>
+      <Page wide>
+      <Stack gap={5}>
+      <Navbar
+        brand={<><Blob icon="users" tone="purple" size="sm" />Teamfinder</>}
+        links={[{ label: 'Home', href: '/' }, { label: 'Board', href: '#app', active: true }]}
+        actions={newPostDialog}
+      />
+      <Split>
         <Sidebar>
           <Stack gap={5}>
-            <Row gap={3} wrap={false}>
-              <Blob icon="users" tone="purple" size="sm" />
-              <Heading level={3}>Teamfinder</Heading>
-            </Row>
-            <Button variant="quiet" size="sm" onClick={onHome}>← Back to home</Button>
-            <Separator />
-
             <Card variant="tight">
               <Stack gap={3}>
                 <Text size="sm" muted>Where posts come from</Text>
@@ -244,27 +268,7 @@ function Board({ onHome }: { onHome: () => void }) {
             </Stack>
             <Row gap={2}>
               <Button variant="quiet" onClick={refresh}>Refresh</Button>
-              <Dialog
-                open={open}
-                onOpenChange={setOpen}
-                title="New post"
-                description="Tell people who you are and who you need."
-                trigger={<Button tone="pink">New post</Button>}
-              >
-                <Stack gap={4}>
-                  <Field label="Your name">{(id) => <Input id={id} value={form.name} onChange={set('name')} />}</Field>
-                  <Row gap={3} wrap={false}>
-                    <Field label="I am a">{(id) => <Select id={id} value={form.role} onChange={set('role')} options={roleOptions} />}</Field>
-                    <Field label="I need a">{(id) => <Select id={id} value={form.lookingFor} onChange={set('lookingFor')} options={roleOptions} />}</Field>
-                  </Row>
-                  <Field label="Skills" hint="Comma separated">{(id) => <Input id={id} value={form.skills} onChange={set('skills')} />}</Field>
-                  <Field label="Note">{(id) => <Textarea id={id} value={form.note} onChange={set('note')} rows={3} />}</Field>
-                  <Field label="Contact" hint="Telegram, email, etc.">{(id) => <Input id={id} value={form.contact} onChange={set('contact')} />}</Field>
-                  <Button tone="mint" block loading={saving} onClick={submit}>
-                    {me ? (demo ? 'Add demo post' : 'Publish') : 'Connect wallet to publish'}
-                  </Button>
-                </Stack>
-              </Dialog>
+
             </Row>
           </Row>
 
@@ -293,7 +297,7 @@ function Board({ onHome }: { onHome: () => void }) {
             <Grid cols={2} gap={4}>
               {visible.map((p) => (
                 <Card key={p.key} variant="tight" motion="lift">
-                  <Stack gap={4}>
+                  <Stack gap={4} fill>
                     <Row wrap={false}>
                       <Avatar fallback={p.name.slice(0, 2).toUpperCase()} tone="purple" />
                       <Stack gap={1}>
@@ -316,6 +320,7 @@ function Board({ onHome }: { onHome: () => void }) {
                         ))}
                       </Row>
                     )}
+                    <Spacer />
                     <Separator />
                     <Row justify="between" wrap={false}>
                       <Text mono truncate>{p.contact}</Text>
@@ -342,7 +347,9 @@ function Board({ onHome }: { onHome: () => void }) {
             </Grid>
           )}
         </Stack>
-      </Shell>
+      </Split>
+      </Stack>
+      </Page>
       <Toaster />
     </TooltipProvider>
   )
