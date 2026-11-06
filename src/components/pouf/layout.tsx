@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
  * Without them the first screen that needs a gap reaches for an inline style,
  * and spacing silently escapes the design system. */
 
-type Gap = 1 | 2 | 3 | 4 | 5 | 6
+type Gap = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 
 /* The --gap indirection is kept from the original: children may not read it,
  * but emitting the same custom property keeps the computed-style contract
@@ -17,6 +17,8 @@ const gapVariant = {
   4: '[--gap:var(--s4)] gap-[var(--gap,var(--s4))]',
   5: '[--gap:var(--s5)] gap-[var(--gap,var(--s4))]',
   6: '[--gap:var(--s6)] gap-[var(--gap,var(--s4))]',
+  7: '[--gap:var(--s7)] gap-[var(--gap,var(--s4))]',
+  8: '[--gap:var(--s8)] gap-[var(--gap,var(--s4))]',
 } as const
 
 /* min-width: 0 on BOTH layout primitives, everywhere.

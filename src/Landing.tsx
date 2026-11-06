@@ -31,7 +31,7 @@ export default function Landing({ onLaunch }: Props) {
 
   return (
     <Page>
-      <Stack gap={6}>
+      <Stack gap={8}>
         <Navbar
           brand={brand}
           links={[
@@ -41,7 +41,7 @@ export default function Landing({ onLaunch }: Props) {
           actions={<Button size="sm" tone="pink" onClick={onLaunch}>Launch</Button>}
         />
 
-        <Grid cols="sidebar" gap={6}>
+        <Grid cols="sidebar" gap={7}>
           <Stack gap={4}>
             <Row gap={2}>
               <Badge tone="yellow">ETHGlobal Mumbai</Badge>
