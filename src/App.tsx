@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Avatar, Badge, Button, Card, Confirm, Dialog, Empty, ErrorNote, Field, Heading, Input,
-  Row, Select, Shell, Sidebar, Skeleton, Spacer, Stack, Text, Textarea, Toaster, TooltipProvider, toast,
+  Avatar, Badge, Blob, Button, Card, Confirm, Dialog, Empty, ErrorNote, Field, Grid, Heading, Input,
+  Row, Select, Separator, Shell, Sidebar, Skeleton, Spacer, Stack, Stat, Text, Textarea, Toaster, TooltipProvider, toast,
 } from './components/pouf'
 import * as arkiv from './arkiv/api'
 import * as mongo from './mongo/api'
@@ -9,7 +9,7 @@ import type { NewPost, Post } from './types'
 import { POST_LIFETIME_HOURS, ROLES } from './arkiv/schema'
 import Landing from './Landing'
 import { DEMO_ME, DEMO_POSTS } from './demoPosts'
-import { filterBySkill, filterPosts, message, short, timeLeft, validatePost } from './lib'
+import { filterBySkill, filterPosts, message, mostWanted, short, timeLeft, validatePost } from './lib'
 
 type Source = 'api' | 'arkiv' | 'demo'
 const SOURCE_OPTIONS = [
@@ -172,38 +172,76 @@ function Board({ onHome }: { onHome: () => void }) {
 
   const set = (k: keyof NewPost) => (v: string) => setForm((f) => ({ ...f, [k]: v }))
 
+  const copyContact = async (contact: string) => {
+    try {
+      await navigator.clipboard.writeText(contact)
+      toast.success('Contact copied')
+    } catch {
+      toast.warning('Could not copy', { description: contact })
+    }
+  }
+
+  const expiringSoon = visible.filter((p) => p.secondsLeft < 3 * 3600).length
+  const wanted = mostWanted(visible)
+  const filtered = need !== ANY || role !== ANY || search.trim() !== ''
+  const clearFilters = () => {
+    setNeed(ANY)
+    setRole(ANY)
+    setSearch('')
+  }
+
   return (
     <TooltipProvider>
       <Shell>
         <Sidebar>
           <Stack gap={5}>
-            <Button variant="quiet" size="sm" onClick={onHome}>← Home</Button>
-            <Heading level={2}>Teammate Finder</Heading>
-            <Text size="sm" muted>ETHGlobal Mumbai. Posts vanish after {POST_LIFETIME_HOURS}h.</Text>
-            <Field label="Data source" hint={SOURCE_HINT[source]}>
-              {(id) => <Select id={id} value={source} onChange={changeSource} options={SOURCE_OPTIONS} />}
-            </Field>
-            {!demo &&
-              (account ? (
-                <Badge tone="mint">{short(account)}</Badge>
-              ) : (
-                <Button tone="purple" onClick={connect}>Connect wallet</Button>
-              ))}
-            <Field label="I need a">
-              {(id) => <Select id={id} value={need} onChange={setNeed} options={filterOptions} />}
-            </Field>
-            <Field label="Posted by a">
-              {(id) => <Select id={id} value={role} onChange={setRole} options={filterOptions} />}
-            </Field>
-            <Field label="Skill search">
-              {(id) => <Input id={id} value={search} onChange={setSearch} placeholder="e.g. solidity" />}
-            </Field>
+            <Row gap={3} wrap={false}>
+              <Blob icon="users" tone="purple" size="sm" />
+              <Heading level={3}>Teamfinder</Heading>
+            </Row>
+            <Button variant="quiet" size="sm" onClick={onHome}>← Back to home</Button>
+            <Separator />
+
+            <Card variant="tight">
+              <Stack gap={3}>
+                <Text size="sm" muted>Where posts come from</Text>
+                <Select value={source} onChange={changeSource} options={SOURCE_OPTIONS} label="Data source" />
+                <Text size="sm" muted>{SOURCE_HINT[source]}</Text>
+                {!demo &&
+                  (account ? (
+                    <Badge tone="mint">{short(account)}</Badge>
+                  ) : (
+                    <Button tone="purple" size="sm" block onClick={connect}>Connect wallet</Button>
+                  ))}
+              </Stack>
+            </Card>
+
+            <Card variant="tight">
+              <Stack gap={4}>
+                <Row justify="between">
+                  <Text size="sm" muted>Filters</Text>
+                  {filtered && <Button variant="quiet" size="sm" onClick={clearFilters}>Clear</Button>}
+                </Row>
+                <Field label="I need a">
+                  {(id) => <Select id={id} value={need} onChange={setNeed} options={filterOptions} />}
+                </Field>
+                <Field label="Posted by a">
+                  {(id) => <Select id={id} value={role} onChange={setRole} options={filterOptions} />}
+                </Field>
+                <Field label="Skill search">
+                  {(id) => <Input id={id} value={search} onChange={setSearch} placeholder="e.g. solidity" />}
+                </Field>
+              </Stack>
+            </Card>
           </Stack>
         </Sidebar>
 
         <Stack gap={5}>
           <Row justify="between">
-            <Heading level={1}>Find your team</Heading>
+            <Stack gap={1}>
+              <Heading level={1}>Find your team</Heading>
+              <Text muted>Posts disappear after {POST_LIFETIME_HOURS}h, so everyone here is still looking.</Text>
+            </Stack>
             <Row gap={2}>
               <Button variant="quiet" onClick={refresh}>Refresh</Button>
               <Dialog
@@ -215,8 +253,10 @@ function Board({ onHome }: { onHome: () => void }) {
               >
                 <Stack gap={4}>
                   <Field label="Your name">{(id) => <Input id={id} value={form.name} onChange={set('name')} />}</Field>
-                  <Field label="I am a">{(id) => <Select id={id} value={form.role} onChange={set('role')} options={roleOptions} />}</Field>
-                  <Field label="I need a">{(id) => <Select id={id} value={form.lookingFor} onChange={set('lookingFor')} options={roleOptions} />}</Field>
+                  <Row gap={3} wrap={false}>
+                    <Field label="I am a">{(id) => <Select id={id} value={form.role} onChange={set('role')} options={roleOptions} />}</Field>
+                    <Field label="I need a">{(id) => <Select id={id} value={form.lookingFor} onChange={set('lookingFor')} options={roleOptions} />}</Field>
+                  </Row>
                   <Field label="Skills" hint="Comma separated">{(id) => <Input id={id} value={form.skills} onChange={set('skills')} />}</Field>
                   <Field label="Note">{(id) => <Textarea id={id} value={form.note} onChange={set('note')} rows={3} />}</Field>
                   <Field label="Contact" hint="Telegram, email, etc.">{(id) => <Input id={id} value={form.contact} onChange={set('contact')} />}</Field>
@@ -228,50 +268,78 @@ function Board({ onHome }: { onHome: () => void }) {
             </Row>
           </Row>
 
+          <Grid cols={3} gap={4}>
+            <Stat label="Open posts" value={String(visible.length)} icon="users" tone="purple" />
+            <Stat label="Most wanted" value={wanted ?? '-'} icon="target" tone="pink" />
+            <Stat label="Expiring in 3h" value={String(expiringSoon)} icon="clock" tone="yellow" />
+          </Grid>
+
           {error && <ErrorNote>{error}</ErrorNote>}
           {loading ? (
-            <Skeleton variant="card" count={3} />
+            <Grid cols={2} gap={4}>
+              <Skeleton variant="card" count={2} />
+              <Skeleton variant="card" count={2} />
+            </Grid>
           ) : visible.length === 0 && !error ? (
-            <Empty title="No posts yet">Be the first to post, or loosen the filters.</Empty>
+            <Card>
+              <Empty title={filtered ? 'No posts match these filters' : 'No posts yet'}>
+                {filtered ? 'Try loosening the filters.' : 'Be the first to post.'}
+              </Empty>
+              <Row justify="center">
+                {filtered ? <Button variant="quiet" onClick={clearFilters}>Clear filters</Button> : null}
+              </Row>
+            </Card>
           ) : (
-            visible.map((p) => (
-              <Card key={p.key} variant="tight" motion="lift">
-                <Stack gap={3}>
-                  <Row>
-                    <Avatar fallback={p.name.slice(0, 2).toUpperCase()} tone="purple" />
-                    <Stack gap={1}>
-                      <Heading level={3}>{p.name}</Heading>
-                      <Text size="sm" muted mono>{short(p.author)}</Text>
-                    </Stack>
-                    <Spacer />
-                    <Badge tone="yellow">{timeLeft(p.secondsLeft)}</Badge>
-                  </Row>
-                  <Row gap={2}>
-                    <Badge tone="blue">{p.role}</Badge>
-                    <Text size="sm" muted>needs a</Text>
-                    <Badge tone="pink">{p.lookingFor}</Badge>
-                  </Row>
-                  {p.skills && <Text size="sm" muted>{p.skills}</Text>}
-                  {p.note && <Text>{p.note}</Text>}
-                  <Row justify="between">
-                    <Text mono>{p.contact}</Text>
-                    {me && p.owner.toLowerCase() === me.toLowerCase() && (
-                      <Confirm
-                        title="Delete this post?"
-                        body="It will be removed from Arkiv for everyone."
-                        confirmLabel="Delete post"
-                        cancelLabel="Keep post"
-                        tone="orange"
-                        loading={deleting === p.key}
-                        onConfirm={() => remove(p)}
-                      >
-                        <Button variant="quiet" size="sm">Delete</Button>
-                      </Confirm>
+            <Grid cols={2} gap={4}>
+              {visible.map((p) => (
+                <Card key={p.key} variant="tight" motion="lift">
+                  <Stack gap={4}>
+                    <Row wrap={false}>
+                      <Avatar fallback={p.name.slice(0, 2).toUpperCase()} tone="purple" />
+                      <Stack gap={1}>
+                        <Heading level={3}>{p.name}</Heading>
+                        <Text size="sm" muted mono truncate>{short(p.author)}</Text>
+                      </Stack>
+                      <Spacer />
+                      <Badge tone="yellow">{timeLeft(p.secondsLeft)}</Badge>
+                    </Row>
+                    <Row gap={2}>
+                      <Badge tone="blue">{p.role}</Badge>
+                      <Text size="sm" muted>needs a</Text>
+                      <Badge tone="pink">{p.lookingFor}</Badge>
+                    </Row>
+                    {p.note && <Text>{p.note}</Text>}
+                    {p.skills && (
+                      <Row gap={2}>
+                        {p.skills.split(',').map((k) => k.trim()).filter(Boolean).map((k) => (
+                          <Badge key={k} tone="mint">{k}</Badge>
+                        ))}
+                      </Row>
                     )}
-                  </Row>
-                </Stack>
-              </Card>
-            ))
+                    <Separator />
+                    <Row justify="between" wrap={false}>
+                      <Text mono truncate>{p.contact}</Text>
+                      <Row gap={2} wrap={false}>
+                        <Button size="sm" variant="quiet" onClick={() => copyContact(p.contact)}>Copy</Button>
+                        {me && p.owner.toLowerCase() === me.toLowerCase() && (
+                          <Confirm
+                            title="Delete this post?"
+                            body="It will be removed for everyone."
+                            confirmLabel="Delete post"
+                            cancelLabel="Keep post"
+                            tone="orange"
+                            loading={deleting === p.key}
+                            onConfirm={() => remove(p)}
+                          >
+                            <Button variant="quiet" size="sm">Delete</Button>
+                          </Confirm>
+                        )}
+                      </Row>
+                    </Row>
+                  </Stack>
+                </Card>
+              ))}
+            </Grid>
           )}
         </Stack>
       </Shell>

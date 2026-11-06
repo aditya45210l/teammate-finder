@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NewPost, Post } from './types'
 import { DEMO_POSTS } from './demoPosts'
-import { byteLength, filterBySkill, filterPosts, short, timeLeft, validatePost } from './lib'
+import { byteLength, filterBySkill, filterPosts, mostWanted, short, timeLeft, validatePost } from './lib'
 
 const valid: NewPost = { role: 'frontend', lookingFor: 'contracts', name: 'Asha', skills: 'react', note: 'hi', contact: 'tg: @a' }
 const post = (skills: string) => ({ skills }) as Post
@@ -50,4 +50,11 @@ describe('filterPosts', () => {
     expect(DEMO_POSTS.every((p) => p.secondsLeft > 0)).toBe(true)
     expect(new Set(DEMO_POSTS.map((p) => p.key)).size).toBe(DEMO_POSTS.length)
   })
+})
+
+describe('mostWanted', () => {
+  it('returns the most requested role', () => {
+    expect(mostWanted(DEMO_POSTS)).toBe('contracts')
+  })
+  it('returns null for no posts', () => expect(mostWanted([])).toBeNull())
 })

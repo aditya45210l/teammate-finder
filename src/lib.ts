@@ -40,3 +40,12 @@ export function validatePost(post: NewPost): string | null {
 export function filterPosts(posts: Post[], { need, role }: { need?: string; role?: string }) {
   return posts.filter((p) => (!need || p.lookingFor === need) && (!role || p.role === role))
 }
+
+/** The role that the most visible posts are looking for, or null when there are none. */
+export function mostWanted(posts: Post[]): string | null {
+  const counts = new Map<string, number>()
+  for (const p of posts) counts.set(p.lookingFor, (counts.get(p.lookingFor) ?? 0) + 1)
+  let best: string | null = null
+  for (const [role, n] of counts) if (best === null || n > counts.get(best)!) best = role
+  return best
+}
