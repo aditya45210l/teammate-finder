@@ -36,3 +36,7 @@ export function validatePost(post: NewPost): string | null {
   }
   return null
 }
+
+export function filterPosts(posts: Post[], { need, role }: { need?: string; role?: string }) {
+  return posts.filter((p) => (!need || p.lookingFor === need) && (!role || p.role === role))
+}

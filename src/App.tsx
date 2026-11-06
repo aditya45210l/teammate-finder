@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Avatar, Badge, Button, Card, Confirm, Dialog, Empty, ErrorNote, Field, Heading, Input,
+  Avatar, Badge, Button, Card, Confirm, Dialog, Empty, ErrorNote, Field, Heading, Input, Switch,
   Row, Select, Shell, Sidebar, Skeleton, Spacer, Stack, Text, Textarea, Toaster, TooltipProvider, toast,
 } from './components/pouf'
 import { connectWallet, createPost, deletePost, listPosts, type NewPost, type Post } from './arkiv/api'
 import { POST_LIFETIME_HOURS, ROLES } from './arkiv/schema'
 import Landing from './Landing'
-import { filterBySkill, message, short, timeLeft, validatePost } from './lib'
+import { DEMO_ME, DEMO_POSTS } from './demoPosts'
+import { filterBySkill, filterPosts, message, short, timeLeft, validatePost } from './lib'
 
 const ANY = 'any'
 const roleOptions = ROLES.map((r) => ({ value: r, label: r }))
@@ -32,6 +33,14 @@ export default function App() {
 function Board({ onHome }: { onHome: () => void }) {
   const [account, setAccount] = useState<`0x${string}` | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
+  const [demo, setDemo] = useState(() => {
+    try {
+      return localStorage.getItem('demo') !== 'off'
+    } catch {
+      return true
+    }
+  })
+  const [demoPosts, setDemoPosts] = useState<Post[]>(DEMO_POSTS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [need, setNeed] = useState(ANY)
@@ -45,9 +54,25 @@ function Board({ onHome }: { onHome: () => void }) {
   const [reload, setReload] = useState(0)
   const refresh = useCallback(() => setReload((n) => n + 1), [])
 
+  const toggleDemo = (on: boolean) => {
+    setDemo(on)
+    try {
+      localStorage.setItem('demo', on ? 'on' : 'off')
+    } catch {
+      /* storage unavailable, the choice just won't persist */
+    }
+  }
+
   useEffect(() => {
+    const filters = { need: need === ANY ? undefined : need, role: role === ANY ? undefined : role }
+    if (demo) {
+      setPosts(filterPosts(demoPosts, filters))
+      setError(null)
+      setLoading(false)
+      return
+    }
     let stale = false
-    listPosts({ need: need === ANY ? undefined : need, role: role === ANY ? undefined : role })
+    listPosts(filters)
       .then((result) => {
         if (stale) return
         setPosts(result)
@@ -59,7 +84,7 @@ function Board({ onHome }: { onHome: () => void }) {
       stale = true
       setLoading(true)
     }
-  }, [need, role, reload])
+  }, [need, role, reload, demo, demoPosts])
 
   useEffect(() => {
     const eth = (window as unknown as { ethereum?: { on?: Function; removeListener?: Function } }).ethereum
@@ -80,13 +105,23 @@ function Board({ onHome }: { onHome: () => void }) {
     }
   }
 
+  const me = demo ? DEMO_ME : account
+
   const submit = async () => {
-    if (!account) return toast.warning('Connect your wallet first')
+    if (!me) return toast.warning('Connect your wallet first')
     const problem = validatePost(form)
     if (problem) return toast.warning(problem)
+    if (demo) {
+      const post: Post = { ...form, name: form.name.trim(), contact: form.contact.trim(), key: `0xdemo-${Date.now()}`, owner: me, author: me, secondsLeft: POST_LIFETIME_HOURS * 3600 }
+      setDemoPosts((list) => [post, ...list])
+      toast.success('Demo post added', { description: 'Switch off demo data to publish on Arkiv.' })
+      setOpen(false)
+      setForm(emptyForm)
+      return
+    }
     setSaving(true)
     try {
-      await createPost(account, { ...form, name: form.name.trim(), contact: form.contact.trim() })
+      await createPost(me!, { ...form, name: form.name.trim(), contact: form.contact.trim() })
       toast.success('Post published', { description: `It disappears in ${POST_LIFETIME_HOURS}h.` })
       setOpen(false)
       setForm(emptyForm)
@@ -99,10 +134,15 @@ function Board({ onHome }: { onHome: () => void }) {
   }
 
   const remove = async (post: Post) => {
-    if (!account) return
+    if (!me) return
+    if (demo) {
+      setDemoPosts((list) => list.filter((p) => p.key !== post.key))
+      toast.success('Post deleted')
+      return
+    }
     setDeleting(post.key)
     try {
-      await deletePost(account, post.key)
+      await deletePost(me, post.key)
       toast.success('Post deleted')
       refresh()
     } catch (e) {
@@ -122,11 +162,15 @@ function Board({ onHome }: { onHome: () => void }) {
             <Button variant="quiet" size="sm" onClick={onHome}>← Home</Button>
             <Heading level={2}>Teammate Finder</Heading>
             <Text size="sm" muted>ETHGlobal Mumbai. Posts vanish after {POST_LIFETIME_HOURS}h.</Text>
-            {account ? (
-              <Badge tone="mint">{short(account)}</Badge>
-            ) : (
-              <Button tone="purple" onClick={connect}>Connect wallet</Button>
-            )}
+            <Field label="Demo data" hint={demo ? 'Sample posts, nothing is saved on-chain.' : 'Live posts from Arkiv.'}>
+              {(id) => <Switch id={id} checked={demo} onChange={toggleDemo} label="Demo data" />}
+            </Field>
+            {!demo &&
+              (account ? (
+                <Badge tone="mint">{short(account)}</Badge>
+              ) : (
+                <Button tone="purple" onClick={connect}>Connect wallet</Button>
+              ))}
             <Field label="I need a">
               {(id) => <Select id={id} value={need} onChange={setNeed} options={filterOptions} />}
             </Field>
@@ -159,7 +203,7 @@ function Board({ onHome }: { onHome: () => void }) {
                   <Field label="Note">{(id) => <Textarea id={id} value={form.note} onChange={set('note')} rows={3} />}</Field>
                   <Field label="Contact" hint="Telegram, email, etc.">{(id) => <Input id={id} value={form.contact} onChange={set('contact')} />}</Field>
                   <Button tone="mint" block loading={saving} onClick={submit}>
-                    {account ? 'Publish' : 'Connect wallet to publish'}
+                    {me ? (demo ? 'Add demo post' : 'Publish') : 'Connect wallet to publish'}
                   </Button>
                 </Stack>
               </Dialog>
@@ -193,7 +237,7 @@ function Board({ onHome }: { onHome: () => void }) {
                   {p.note && <Text>{p.note}</Text>}
                   <Row justify="between">
                     <Text mono>{p.contact}</Text>
-                    {account && p.owner.toLowerCase() === account.toLowerCase() && (
+                    {me && p.owner.toLowerCase() === me.toLowerCase() && (
                       <Confirm
                         title="Delete this post?"
                         body="It will be removed from Arkiv for everyone."

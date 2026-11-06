@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NewPost, Post } from './arkiv/api'
-import { byteLength, filterBySkill, short, timeLeft, validatePost } from './lib'
+import { DEMO_POSTS } from './demoPosts'
+import { byteLength, filterBySkill, filterPosts, short, timeLeft, validatePost } from './lib'
 
 const valid: NewPost = { role: 'frontend', lookingFor: 'contracts', name: 'Asha', skills: 'react', note: 'hi', contact: 'tg: @a' }
 const post = (skills: string) => ({ skills }) as Post
@@ -36,5 +37,17 @@ describe('validatePost', () => {
     expect(byteLength(note)).toBe(140)
     expect(validatePost({ ...valid, note })).toMatch(/Note is too long/)
     expect(validatePost({ ...valid, note: 'a'.repeat(128) })).toBeNull()
+  })
+})
+
+describe('filterPosts', () => {
+  it('returns all demo posts without filters', () => expect(filterPosts(DEMO_POSTS, {})).toHaveLength(DEMO_POSTS.length))
+  it('filters by need and role together', () => {
+    const r = filterPosts(DEMO_POSTS, { need: 'contracts', role: 'frontend' })
+    expect(r.map((p) => p.name)).toEqual(['Asha'])
+  })
+  it('demo posts are all live and have unique keys', () => {
+    expect(DEMO_POSTS.every((p) => p.secondsLeft > 0)).toBe(true)
+    expect(new Set(DEMO_POSTS.map((p) => p.key)).size).toBe(DEMO_POSTS.length)
   })
 })
