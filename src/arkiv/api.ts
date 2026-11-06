@@ -5,35 +5,8 @@ import { custom, http, type Address, type Hex } from 'viem'
 import { chain, accessKey } from './chain'
 import { POST_LIFETIME_HOURS, TeammatePosts } from './schema'
 
-export interface Post {
-  key: Hex
-  owner: Address
-  author: Address
-  role: string
-  lookingFor: string
-  name: string
-  skills: string
-  note: string
-  contact: string
-  /** Estimated seconds until the post expires. */
-  secondsLeft: number
-}
-
-export interface NewPost {
-  role: string
-  lookingFor: string
-  name: string
-  skills: string
-  note: string
-  contact: string
-}
-
-export interface Filters {
-  /** Filter on the `lookingFor` column ("I need a ..."). */
-  need?: string
-  /** Filter on the `role` column ("Posted by a ..."). */
-  role?: string
-}
+export type { Filters, NewPost, Post } from '../types'
+import type { Filters, NewPost, Post } from '../types'
 
 const publicClient = createPublicClient({ chain, transport: http() })
 
@@ -57,7 +30,7 @@ export async function listPosts({ need, role }: Filters = {}): Promise<Post[]> {
   ])
 
   return result.entities.map((row) => ({
-    key: row.$key,
+    key: row.$key as string,
     owner: row.$owner,
     author: row.author.value as Address,
     role: row.role.value,
@@ -110,6 +83,6 @@ export async function createPost(account: Address, post: NewPost): Promise<Hex> 
   return entityKey
 }
 
-export async function deletePost(account: Address, entityKey: Hex): Promise<void> {
-  await walletFor(account).deleteEntity({ entityKey })
+export async function deletePost(account: Address, entityKey: string): Promise<void> {
+  await walletFor(account).deleteEntity({ entityKey: entityKey as Hex })
 }

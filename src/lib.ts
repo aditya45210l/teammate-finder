@@ -1,5 +1,5 @@
 import { MAX_STRING_BYTES } from '@arkiv-network/sdk'
-import type { NewPost, Post } from './arkiv/api'
+import type { NewPost, Post } from './types'
 
 export const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
 

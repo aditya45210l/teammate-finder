@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NewPost, Post } from './arkiv/api'
+import type { NewPost, Post } from './types'
 import { DEMO_POSTS } from './demoPosts'
 import { byteLength, filterBySkill, filterPosts, short, timeLeft, validatePost } from './lib'
 

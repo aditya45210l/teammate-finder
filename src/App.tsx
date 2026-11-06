@@ -1,13 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Avatar, Badge, Button, Card, Confirm, Dialog, Empty, ErrorNote, Field, Heading, Input, Switch,
+  Avatar, Badge, Button, Card, Confirm, Dialog, Empty, ErrorNote, Field, Heading, Input,
   Row, Select, Shell, Sidebar, Skeleton, Spacer, Stack, Text, Textarea, Toaster, TooltipProvider, toast,
 } from './components/pouf'
-import { connectWallet, createPost, deletePost, listPosts, type NewPost, type Post } from './arkiv/api'
+import * as arkiv from './arkiv/api'
+import * as mongo from './mongo/api'
+import type { NewPost, Post } from './types'
 import { POST_LIFETIME_HOURS, ROLES } from './arkiv/schema'
 import Landing from './Landing'
 import { DEMO_ME, DEMO_POSTS } from './demoPosts'
 import { filterBySkill, filterPosts, message, short, timeLeft, validatePost } from './lib'
+
+type Source = 'api' | 'arkiv' | 'demo'
+const SOURCE_OPTIONS = [
+  { value: 'api', label: 'Live (MongoDB)' },
+  { value: 'arkiv', label: 'Arkiv testnet' },
+  { value: 'demo', label: 'Demo data' },
+]
+const SOURCE_HINT: Record<Source, string> = {
+  api: 'Shared posts, expire after 24h.',
+  arkiv: 'Posts stored on Arkiv. Needs testnet funds.',
+  demo: 'Sample posts in your browser only.',
+}
 
 const ANY = 'any'
 const roleOptions = ROLES.map((r) => ({ value: r, label: r }))
@@ -33,13 +47,15 @@ export default function App() {
 function Board({ onHome }: { onHome: () => void }) {
   const [account, setAccount] = useState<`0x${string}` | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
-  const [demo, setDemo] = useState(() => {
+  const [source, setSource] = useState<Source>(() => {
     try {
-      return localStorage.getItem('demo') !== 'off'
+      const saved = localStorage.getItem('source')
+      return saved === 'arkiv' || saved === 'demo' ? saved : 'api'
     } catch {
-      return true
+      return 'api'
     }
   })
+  const demo = source === 'demo'
   const [demoPosts, setDemoPosts] = useState<Post[]>(DEMO_POSTS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -54,10 +70,11 @@ function Board({ onHome }: { onHome: () => void }) {
   const [reload, setReload] = useState(0)
   const refresh = useCallback(() => setReload((n) => n + 1), [])
 
-  const toggleDemo = (on: boolean) => {
-    setDemo(on)
+  const changeSource = (next: string) => {
+    setSource(next as Source)
+    setLoading(true)
     try {
-      localStorage.setItem('demo', on ? 'on' : 'off')
+      localStorage.setItem('source', next)
     } catch {
       /* storage unavailable, the choice just won't persist */
     }
@@ -72,7 +89,8 @@ function Board({ onHome }: { onHome: () => void }) {
       return
     }
     let stale = false
-    listPosts(filters)
+    ;(source === 'arkiv' ? arkiv : mongo)
+      .listPosts(filters)
       .then((result) => {
         if (stale) return
         setPosts(result)
@@ -84,7 +102,7 @@ function Board({ onHome }: { onHome: () => void }) {
       stale = true
       setLoading(true)
     }
-  }, [need, role, reload, demo, demoPosts])
+  }, [need, role, reload, source, demoPosts, demo])
 
   useEffect(() => {
     const eth = (window as unknown as { ethereum?: { on?: Function; removeListener?: Function } }).ethereum
@@ -98,7 +116,7 @@ function Board({ onHome }: { onHome: () => void }) {
 
   const connect = async () => {
     try {
-      setAccount(await connectWallet())
+      setAccount(await (source === 'arkiv' ? arkiv.connectWallet() : mongo.connectAccount()))
       toast.success('Wallet connected')
     } catch (e) {
       toast.error('Could not connect', { description: message(e) })
@@ -114,14 +132,14 @@ function Board({ onHome }: { onHome: () => void }) {
     if (demo) {
       const post: Post = { ...form, name: form.name.trim(), contact: form.contact.trim(), key: `0xdemo-${Date.now()}`, owner: me, author: me, secondsLeft: POST_LIFETIME_HOURS * 3600 }
       setDemoPosts((list) => [post, ...list])
-      toast.success('Demo post added', { description: 'Switch off demo data to publish on Arkiv.' })
+      toast.success('Demo post added', { description: 'Switch the data source to publish for real.' })
       setOpen(false)
       setForm(emptyForm)
       return
     }
     setSaving(true)
     try {
-      await createPost(me!, { ...form, name: form.name.trim(), contact: form.contact.trim() })
+      await (source === 'arkiv' ? arkiv : mongo).createPost(me!, { ...form, name: form.name.trim(), contact: form.contact.trim() })
       toast.success('Post published', { description: `It disappears in ${POST_LIFETIME_HOURS}h.` })
       setOpen(false)
       setForm(emptyForm)
@@ -142,7 +160,7 @@ function Board({ onHome }: { onHome: () => void }) {
     }
     setDeleting(post.key)
     try {
-      await deletePost(me, post.key)
+      await (source === 'arkiv' ? arkiv : mongo).deletePost(me, post.key)
       toast.success('Post deleted')
       refresh()
     } catch (e) {
@@ -162,8 +180,8 @@ function Board({ onHome }: { onHome: () => void }) {
             <Button variant="quiet" size="sm" onClick={onHome}>← Home</Button>
             <Heading level={2}>Teammate Finder</Heading>
             <Text size="sm" muted>ETHGlobal Mumbai. Posts vanish after {POST_LIFETIME_HOURS}h.</Text>
-            <Field label="Demo data" hint={demo ? 'Sample posts, nothing is saved on-chain.' : 'Live posts from Arkiv.'}>
-              {(id) => <Switch id={id} checked={demo} onChange={toggleDemo} label="Demo data" />}
+            <Field label="Data source" hint={SOURCE_HINT[source]}>
+              {(id) => <Select id={id} value={source} onChange={changeSource} options={SOURCE_OPTIONS} />}
             </Field>
             {!demo &&
               (account ? (

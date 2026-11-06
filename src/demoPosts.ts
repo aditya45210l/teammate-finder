@@ -1,5 +1,5 @@
 import type { Address, Hex } from 'viem'
-import type { Post } from './arkiv/api'
+import type { Post } from './types'
 
 /** The "wallet" that owns posts created in demo mode. */
 export const DEMO_ME = '0x000000000000000000000000000000000000dEaD' as Address

@@ -13,6 +13,12 @@ npm run dev
 ```
 Fund a wallet at https://hub.arkiv.network/faucet to post. To seed demo posts, also set `ARKIV_ACCESS_KEY` and `PRIVATE_KEY` in `.env`, then `npm run seed`.
 
+## Data sources
+Pick one in the sidebar:
+- **Live (MongoDB)**: an Express API in `server/` with a TTL index (24h expiry). Posts and deletes are signed with the wallet, and the server checks the signature. Needs `MONGODB_URI` in `.env`; run `npm run server` next to `npm run dev`, and `npm run seed:db` for sample posts.
+- **Arkiv testnet**: the original on-chain version (needs funds).
+- **Demo data**: sample posts in the browser only.
+
 ## Writer wallet
 TODO: paste the address printed by `npm run seed`.
 
