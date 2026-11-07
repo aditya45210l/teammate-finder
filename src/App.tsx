@@ -5,6 +5,7 @@ import {
 } from './components/pouf'
 import * as mongo from './mongo/api'
 import type { NewPost, Post } from './types'
+import { useEns } from './ens'
 import { LIMITS, POST_LIFETIME_HOURS, ROLES } from '../shared/constants'
 import Landing from './Landing'
 import { DEMO_ME, DEMO_POSTS } from './demoPosts'
@@ -176,6 +177,7 @@ function Board({ onHome }: { onHome: () => void }) {
   }
 
   const me = demo ? DEMO_ME : account
+  const ensName = useEns(account).name
 
   const closeDialog = (next: boolean) => {
     setOpen(next)
@@ -310,7 +312,7 @@ function Board({ onHome }: { onHome: () => void }) {
                 ]}
               >
                 <Button variant="quiet" size="sm">
-                  <Badge tone="mint">{short(account)}</Badge>
+                  <Badge tone="mint">{ensName ?? short(account)}</Badge>
                 </Button>
               </DropdownMenu>
             ) : (
@@ -396,53 +398,14 @@ function Board({ onHome }: { onHome: () => void }) {
           ) : (
             <Grid cols={2} gap={4}>
               {visible.map((p) => (
-                <Card key={p.key} variant="tight" motion="lift">
-                  <Stack gap={4} fill>
-                    <Row wrap={false}>
-                      <Avatar fallback={p.name.slice(0, 2).toUpperCase()} tone="purple" />
-                      <Stack gap={1}>
-                        <Heading level={3}>{p.name}</Heading>
-                        <Text size="sm" muted mono truncate>{short(p.author)}</Text>
-                      </Stack>
-                      <Spacer />
-                      <Badge tone="yellow">{timeLeft(p.secondsLeft)}</Badge>
-                    </Row>
-                    <Row gap={2}>
-                      <Badge tone="blue">{p.role}</Badge>
-                      <Text size="sm" muted>needs a</Text>
-                      <Badge tone="pink">{p.lookingFor}</Badge>
-                    </Row>
-                    {p.note && <Text>{p.note}</Text>}
-                    {p.skills && (
-                      <Row gap={2}>
-                        {p.skills.split(',').map((k) => k.trim()).filter(Boolean).map((k) => (
-                          <Badge key={k} tone="mint">{k}</Badge>
-                        ))}
-                      </Row>
-                    )}
-                    <Spacer />
-                    <Separator />
-                    <Row justify="between" wrap={false}>
-                      <Text mono truncate>{p.contact}</Text>
-                      <Row gap={2} wrap={false}>
-                        <Button size="sm" variant="quiet" onClick={() => copyContact(p.contact)}>Copy</Button>
-                        {me && p.owner.toLowerCase() === me.toLowerCase() && (
-                          <Confirm
-                            title="Delete this post?"
-                            body="It will be removed for everyone."
-                            confirmLabel="Delete post"
-                            cancelLabel="Keep post"
-                            tone="orange"
-                            loading={deleting === p.key}
-                            onConfirm={() => remove(p)}
-                          >
-                            <Button variant="quiet" size="sm">Delete</Button>
-                          </Confirm>
-                        )}
-                      </Row>
-                    </Row>
-                  </Stack>
-                </Card>
+                <PostCard
+                  key={p.key}
+                  post={p}
+                  canDelete={!!me && p.owner.toLowerCase() === me.toLowerCase()}
+                  deleting={deleting === p.key}
+                  onCopy={copyContact}
+                  onDelete={remove}
+                />
               ))}
             </Grid>
           )}
@@ -452,5 +415,64 @@ function Board({ onHome }: { onHome: () => void }) {
       </Page>
       <Toaster />
     </TooltipProvider>
+  )
+}
+
+function PostCard({ post: p, canDelete, deleting, onCopy, onDelete }: {
+  post: Post
+  canDelete: boolean
+  deleting: boolean
+  onCopy: (contact: string) => void
+  onDelete: (post: Post) => void
+}) {
+  const ens = useEns(p.author)
+  return (
+    <Card variant="tight" motion="lift">
+      <Stack gap={4} fill>
+        <Row wrap={false}>
+          <Avatar src={ens.avatar ?? undefined} alt={ens.name ?? p.name} fallback={p.name.slice(0, 2).toUpperCase()} tone="purple" />
+          <Stack gap={1}>
+            <Heading level={3}>{p.name}</Heading>
+            <Text size="sm" muted mono truncate>{ens.name ?? short(p.author)}</Text>
+          </Stack>
+          <Spacer />
+          <Badge tone="yellow">{timeLeft(p.secondsLeft)}</Badge>
+        </Row>
+        <Row gap={2}>
+          <Badge tone="blue">{p.role}</Badge>
+          <Text size="sm" muted>needs a</Text>
+          <Badge tone="pink">{p.lookingFor}</Badge>
+        </Row>
+        {p.note && <Text>{p.note}</Text>}
+        {p.skills && (
+          <Row gap={2}>
+            {p.skills.split(',').map((k) => k.trim()).filter(Boolean).map((k) => (
+              <Badge key={k} tone="mint">{k}</Badge>
+            ))}
+          </Row>
+        )}
+        <Spacer />
+        <Separator />
+        <Row justify="between" wrap={false}>
+          <Text mono truncate>{p.contact}</Text>
+          <Row gap={2} wrap={false}>
+            <Button size="sm" variant="quiet" onClick={() => onCopy(p.contact)}>Copy</Button>
+            {canDelete && (
+              <Confirm
+                title="Delete this post?"
+                body="It will be removed for everyone."
+                confirmLabel="Delete post"
+                cancelLabel="Keep post"
+                tone="orange"
+                loading={deleting}
+                onConfirm={() => onDelete(p)}
+              >
+                <Button variant="quiet" size="sm">Delete</Button>
+              </Confirm>
+            )}
+          </Row>
+        </Row>
+      </Stack>
+    </Card>
   )
 }

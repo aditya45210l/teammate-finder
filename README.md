@@ -10,6 +10,9 @@ Vite, React 19, TypeScript, Tailwind v4, and the [1st-Pouf](https://github.com/m
 - **Ownership:** creating or deleting a post needs a wallet signature (`personal_sign`). The server checks it with viem and only lets the author delete. Signatures older than 5 minutes are rejected.
 - **Demo mode:** pick "Demo data" in the sidebar to try the UI with sample posts and no wallet or network.
 
+## ENS
+Wallet addresses are shown as ENS names with avatars when one exists (`src/ens.ts`). The navbar shows your own ENS name once you connect, and each post card shows the author's name instead of a hex address. Lookups are read-only reverse resolution on Ethereum mainnet through viem, cached per address.
+
 ## Run
 ```bash
 npm install
