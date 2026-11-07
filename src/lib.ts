@@ -1,4 +1,4 @@
-import { MAX_STRING_BYTES } from '@arkiv-network/sdk'
+import { LIMITS } from '../shared/constants'
 import type { NewPost, Post } from './types'
 
 export const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
@@ -17,10 +17,7 @@ export function filterBySkill(posts: Post[], search: string) {
   return q ? posts.filter((p) => p.skills.toLowerCase().includes(q)) : posts
 }
 
-/** Arkiv strings are capped in bytes, not characters. */
-export const byteLength = (s: string) => new TextEncoder().encode(s).length
-
-const FIELDS: [keyof NewPost, string][] = [
+const FIELDS: [keyof typeof LIMITS, string][] = [
   ['name', 'Name'],
   ['skills', 'Skills'],
   ['note', 'Note'],
@@ -32,7 +29,7 @@ export function validatePost(post: NewPost): string | null {
   if (!post.name.trim()) return 'Name is required'
   if (!post.contact.trim()) return 'Contact is required'
   for (const [key, label] of FIELDS) {
-    if (byteLength(post[key]) > MAX_STRING_BYTES) return `${label} is too long (max ${MAX_STRING_BYTES} bytes)`
+    if (post[key].length > LIMITS[key]) return `${label} is too long (max ${LIMITS[key]} characters)`
   }
   return null
 }

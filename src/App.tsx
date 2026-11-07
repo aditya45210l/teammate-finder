@@ -3,23 +3,20 @@ import {
   Avatar, Badge, Blob, Button, Card, Confirm, Dialog, Empty, ErrorNote, Field, Grid, Heading, Input,
   Navbar, Page, Row, Select, Separator, Sidebar, Split, Skeleton, Spacer, Stack, Stat, Text, Textarea, Toaster, TooltipProvider, toast,
 } from './components/pouf'
-import * as arkiv from './arkiv/api'
 import * as mongo from './mongo/api'
 import type { NewPost, Post } from './types'
-import { POST_LIFETIME_HOURS, ROLES } from './arkiv/schema'
+import { POST_LIFETIME_HOURS, ROLES } from '../shared/constants'
 import Landing from './Landing'
 import { DEMO_ME, DEMO_POSTS } from './demoPosts'
 import { filterBySkill, filterPosts, message, mostWanted, short, timeLeft, validatePost } from './lib'
 
-type Source = 'api' | 'arkiv' | 'demo'
+type Source = 'api' | 'demo'
 const SOURCE_OPTIONS = [
   { value: 'api', label: 'Live (MongoDB)' },
-  { value: 'arkiv', label: 'Arkiv testnet' },
   { value: 'demo', label: 'Demo data' },
 ]
 const SOURCE_HINT: Record<Source, string> = {
   api: 'Shared posts, expire after 24h.',
-  arkiv: 'Posts stored on Arkiv. Needs testnet funds.',
   demo: 'Sample posts in your browser only.',
 }
 
@@ -50,7 +47,7 @@ function Board() {
   const [source, setSource] = useState<Source>(() => {
     try {
       const saved = localStorage.getItem('source')
-      return saved === 'arkiv' || saved === 'demo' ? saved : 'api'
+      return saved === 'demo' ? saved : 'api'
     } catch {
       return 'api'
     }
@@ -89,7 +86,7 @@ function Board() {
       return
     }
     let stale = false
-    ;(source === 'arkiv' ? arkiv : mongo)
+    mongo
       .listPosts(filters)
       .then((result) => {
         if (stale) return
@@ -116,7 +113,7 @@ function Board() {
 
   const connect = async () => {
     try {
-      setAccount(await (source === 'arkiv' ? arkiv.connectWallet() : mongo.connectAccount()))
+      setAccount(await mongo.connectAccount())
       toast.success('Wallet connected')
     } catch (e) {
       toast.error('Could not connect', { description: message(e) })
@@ -139,7 +136,7 @@ function Board() {
     }
     setSaving(true)
     try {
-      await (source === 'arkiv' ? arkiv : mongo).createPost(me!, { ...form, name: form.name.trim(), contact: form.contact.trim() })
+      await mongo.createPost(me!, { ...form, name: form.name.trim(), contact: form.contact.trim() })
       toast.success('Post published', { description: `It disappears in ${POST_LIFETIME_HOURS}h.` })
       setOpen(false)
       setForm(emptyForm)
@@ -160,7 +157,7 @@ function Board() {
     }
     setDeleting(post.key)
     try {
-      await (source === 'arkiv' ? arkiv : mongo).deletePost(me, post.key)
+      await mongo.deletePost(me, post.key)
       toast.success('Post deleted')
       refresh()
     } catch (e) {

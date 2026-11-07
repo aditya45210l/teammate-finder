@@ -1,34 +1,26 @@
-# Mumbai Teammate Finder
+# Teamfinder
 
-Hackers post who they are and who they need. Posts expire after 24h and only the author's wallet can delete one.
-Built for the Arkiv "Build on Arkiv (from scratch)" track on testnet `rabdi` (chain id 7794095).
+A small board for hackathon people to find teammates. Post who you are and who you need. Posts expire after 24 hours, and only the wallet that created a post can delete it. Built for ETHGlobal Mumbai.
 
-UI uses only [1st-Pouf](https://github.com/moji2002/1st-pouf) components (MIT, copied into `src/components/pouf/`).
+## Stack
+Vite, React 19, TypeScript, Tailwind v4, and the [1st-Pouf](https://github.com/moji2002/1st-pouf) component library (MIT, copied into `src/components/pouf/`). The API is Express with MongoDB Atlas.
+
+## How it works
+- **Expiry:** posts have an `expiresAt` date and a MongoDB TTL index removes them after 24 hours. The API also hides expired posts that the TTL sweep has not removed yet.
+- **Ownership:** creating or deleting a post needs a wallet signature (`personal_sign`). The server checks it with viem and only lets the author delete. Signatures older than 5 minutes are rejected.
+- **Demo mode:** pick "Demo data" in the sidebar to try the UI with sample posts and no wallet or network.
 
 ## Run
 ```bash
 npm install
-cp .env.example .env   # add VITE_ARKIV_ACCESS_KEY from https://hub.arkiv.network/access-keys
-npm run dev
+cp .env.example .env   # set MONGODB_URI from MongoDB Atlas
+npm run server         # API on http://localhost:8787
+npm run dev            # front end on http://localhost:5173 (proxies /api)
+npm run seed:db        # optional: insert sample posts
+npm test
 ```
-Fund a wallet at https://hub.arkiv.network/faucet to post. To seed demo posts, also set `ARKIV_ACCESS_KEY` and `PRIVATE_KEY` in `.env`, then `npm run seed`.
 
-## Data sources
-Pick one in the sidebar:
-- **Live (MongoDB)**: an Express API in `server/` with a TTL index (24h expiry). Posts and deletes are signed with the wallet, and the server checks the signature. Needs `MONGODB_URI` in `.env`; run `npm run server` next to `npm run dev`, and `npm run seed:db` for sample posts.
-- **Arkiv testnet**: the original on-chain version (needs funds).
-- **Demo data**: sample posts in the browser only.
-
-## Writer wallet
-The seed script writes demo posts from `0xB055409516C3f78Ec57B8dd576fb5214aD57378E`.
-That wallet has no testnet funds yet, so no demo posts are on Arkiv at the time of writing. Fund it at https://hub.arkiv.network/faucet and run `npm run seed`.
-
-## Example query
-```ts
-publicClient.select().from(TeammatePosts)
-  .where(and(eq('lookingFor', 'contracts'), eq('role', 'frontend')))
-  .orderBy(desc('$expiresAt')).limit(100).fetch()
-```
+For one process in production, `npm start` builds the front end and the API serves it from `dist/`.
 
 ## AI usage
 Built with Claude Code.

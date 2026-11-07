@@ -1,10 +1,11 @@
 import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
+import path from 'node:path'
 import { MongoClient, ObjectId, type Collection } from 'mongodb'
 import { isAddress, verifyMessage, type Hex } from 'viem'
 import { AUTH_WINDOW_MS, createMessage, deleteMessage } from '../shared/auth'
-import { POST_LIFETIME_HOURS, ROLES } from '../src/arkiv/schema'
+import { LIMITS, POST_LIFETIME_HOURS, ROLES } from '../shared/constants'
 
 export interface PostDoc {
   author: string
@@ -18,7 +19,7 @@ export interface PostDoc {
   expiresAt: Date
 }
 
-const MAX = { name: 80, skills: 200, note: 500, contact: 120 } as const
+const MAX = LIMITS
 const isRole = (v: unknown): v is string => typeof v === 'string' && (ROLES as readonly string[]).includes(v)
 
 const text = (v: unknown, max: number) => (typeof v === 'string' && v.trim().length > 0 && v.length <= max ? v.trim() : null)
@@ -98,6 +99,11 @@ export function createApp(posts: Collection<PostDoc>) {
     if (!deletedCount) return res.status(404).json({ error: 'Not found or not yours' })
     res.status(204).end()
   })
+
+  // In production the same process serves the built front end.
+  const dist = path.resolve(import.meta.dirname, '../dist')
+  app.use(express.static(dist))
+  app.get(/^\/(?!api\/).*/, (_req, res, next) => res.sendFile(path.join(dist, 'index.html'), (err) => err && next()))
 
   return app
 }

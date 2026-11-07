@@ -25,15 +25,15 @@ The app has a landing page, a board with live stats (open posts, most wanted rol
 ## How it's made
 The front end is Vite, React 19, TypeScript and Tailwind v4. The whole UI is built only from the 1st-Pouf component library (a shadcn-style registry of claymorphism components): screens use variant props and never raw HTML, classNames or inline styles.
 
-Data has three sources, switchable in the sidebar. The Arkiv source uses @arkiv-network/sdk on the rabdi testnet: posts are entities with a 24 hour expiration (ExpirationTime.fromHours(24)), role and lookingFor are indexed columns so filters are real queries, and ownership and deletion come from the chain. The Live source is an Express and MongoDB Atlas API with a TTL index for the 24 hour expiry; writes are signed with the wallet (personal_sign) and the server verifies the signature with viem, so only the author can delete. The third source is built-in demo data.
+The back end is a small Express API on MongoDB Atlas. Posts carry an expiresAt date and a TTL index deletes them after 24 hours, with the API also hiding expired ones in between sweeps. There are no accounts: writes are signed with the user's wallet (personal_sign) over a message that includes the address and a timestamp, and the server verifies it with viem. Only the author's signature can delete a post, and signatures older than 5 minutes are rejected. A demo mode with built-in sample data lets the UI run with no wallet or network.
 
-Notable details: Arkiv strings are capped at 128 bytes, so the form validates bytes, not characters. $expiresAt is a block height, so time left is computed from getBlockTiming(). Skill search runs in the browser because Arkiv has no "contains" operator. Vitest covers the helpers, a live Arkiv read smoke test, and API tests for signatures, ownership and expiry.
+Notable details: filters are validated on the server against the allowed roles, skill search runs in the browser, and the build is served by the same Express process for a single deploy. Vitest covers the helpers and API tests for bad signatures, wrong wallet, expired signature, invalid fields, owner-only delete and expiry.
 
 ## GitHub repository
 https://github.com/aditya45210l/teammate-finder
 
 ## Tech stack
-React 19, TypeScript, Vite, Tailwind v4, 1st-Pouf, Radix UI, framer-motion, viem, @arkiv-network/sdk, Express, MongoDB Atlas, Vitest.
+React 19, TypeScript, Vite, Tailwind v4, 1st-Pouf, Radix UI, framer-motion, viem, Express, MongoDB Atlas, Vitest.
 
 ## Prize track
-Arkiv: "Build on Arkiv (from scratch)". Honest note: Arkiv is supported and tested for reads, but no posts have been written to Arkiv yet because the seed wallet is unfunded.
+TODO: the Arkiv integration was removed, so the Arkiv track no longer applies. Pick another track.

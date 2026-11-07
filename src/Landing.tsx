@@ -17,9 +17,9 @@ const STEPS = [
 ] as const
 
 const FEATURES = [
-  { icon: 'clock', tone: 'yellow', title: 'Posts expire in 24h', body: 'No stale listings. Every post disappears on its own, enforced on-chain by Arkiv.' },
+  { icon: 'clock', tone: 'yellow', title: 'Posts expire in 24h', body: 'No stale listings. Every post disappears on its own after a day.' },
   { icon: 'lock', tone: 'mint', title: 'Only you can delete', body: 'Posts belong to your wallet. Nobody else can edit or remove them.' },
-  { icon: 'database', tone: 'orange', title: 'No backend, no signup', body: 'Data lives on Arkiv. Connect a wallet and you are in.' },
+  { icon: 'database', tone: 'orange', title: 'No backend, no signup', body: 'Connect a wallet and you are in. Your wallet is your identity.' },
 ] as const
 
 interface Props {
@@ -45,7 +45,7 @@ export default function Landing({ onLaunch }: Props) {
           <Stack gap={4}>
             <Row gap={2}>
               <Badge tone="yellow">ETHGlobal Mumbai</Badge>
-              <Badge tone="mint">Built on Arkiv</Badge>
+              <Badge tone="mint">Wallet sign-in</Badge>
             </Row>
             <Heading level={1}>
               Find your <Highlight>dream team</Highlight> before the clock runs out.
@@ -135,7 +135,7 @@ export default function Landing({ onLaunch }: Props) {
           brand={brand}
           tagline="A tiny teammate board for hackathon people."
           columns={[
-            { title: 'Built with', links: [{ label: 'Arkiv', href: 'https://docs.arkiv.network' }, { label: '1st-Pouf', href: 'https://github.com/moji2002/1st-pouf' }] },
+            { title: 'Built with', links: [{ label: 'MongoDB Atlas', href: 'https://www.mongodb.com/atlas' }, { label: '1st-Pouf', href: 'https://github.com/moji2002/1st-pouf' }] },
           ]}
           note="Made for ETHGlobal Mumbai."
         />

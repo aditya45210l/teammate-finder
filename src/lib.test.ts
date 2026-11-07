@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NewPost, Post } from './types'
 import { DEMO_POSTS } from './demoPosts'
-import { byteLength, filterBySkill, filterPosts, mostWanted, short, timeLeft, validatePost } from './lib'
+import { filterBySkill, filterPosts, mostWanted, short, timeLeft, validatePost } from './lib'
 
 const valid: NewPost = { role: 'frontend', lookingFor: 'contracts', name: 'Asha', skills: 'react', note: 'hi', contact: 'tg: @a' }
 const post = (skills: string) => ({ skills }) as Post
@@ -32,11 +32,9 @@ describe('validatePost', () => {
     expect(validatePost({ ...valid, name: ' ' })).toMatch(/Name/)
     expect(validatePost({ ...valid, contact: '' })).toMatch(/Contact/)
   })
-  it('counts bytes, not characters', () => {
-    const note = 'é'.repeat(70) // 70 chars, 140 bytes
-    expect(byteLength(note)).toBe(140)
-    expect(validatePost({ ...valid, note })).toMatch(/Note is too long/)
-    expect(validatePost({ ...valid, note: 'a'.repeat(128) })).toBeNull()
+  it('enforces character limits', () => {
+    expect(validatePost({ ...valid, note: 'a'.repeat(501) })).toMatch(/Note is too long/)
+    expect(validatePost({ ...valid, note: 'a'.repeat(500) })).toBeNull()
   })
 })
 
