@@ -12,6 +12,39 @@ export function timeLeft(seconds: number) {
 
 export const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
+export interface FriendlyError {
+  /** A cancelled wallet prompt is not a failure and should not look like one. */
+  cancelled: boolean
+  title: string
+  description: string
+}
+
+/** Turns wallet, network and API errors into something a person can act on. */
+export function friendlyError(e: unknown, action: string): FriendlyError {
+  const err = e as { code?: number | string; name?: string; status?: number; message?: string }
+  const text = err?.message ?? String(e)
+  if (err?.code === 4001 || err?.code === 'ACTION_REJECTED' || /user (rejected|denied)|rejected the request/i.test(text)) {
+    return { cancelled: true, title: 'Cancelled', description: `You cancelled the request in your wallet, so nothing was ${action}.` }
+  }
+  if (err?.code === -32002) {
+    return { cancelled: false, title: 'Wallet is busy', description: 'A request is already open in your wallet. Open it and approve or reject it.' }
+  }
+  if (/No wallet found/i.test(text)) {
+    return { cancelled: false, title: 'No wallet found', description: 'Install MetaMask or another browser wallet, then try again.' }
+  }
+  if (err?.name === 'ApiError') {
+    const status = err.status ?? 0
+    if (status === 0) return { cancelled: false, title: "Can't reach the server", description: 'Check your connection and try again.' }
+    if (status === 401) return { cancelled: false, title: 'Signature not accepted', description: 'Sign the message again. If your clock is wrong, fix it and retry.' }
+    if (status === 404 && action === 'deleted') return { cancelled: false, title: 'Post not found', description: 'It may have expired, or it belongs to another wallet.' }
+    if (status === 404) return { cancelled: false, title: 'Server not available', description: 'The API is not reachable at this address. Try demo data, or come back later.' }
+    if (status === 400) return { cancelled: false, title: 'Check the form', description: text }
+    if (status === 429) return { cancelled: false, title: 'Slow down', description: 'Too many requests. Wait a moment and try again.' }
+    if (status >= 500) return { cancelled: false, title: 'Server problem', description: 'The server had a problem. Try again in a moment.' }
+  }
+  return { cancelled: false, title: 'Something went wrong', description: text }
+}
+
 export function filterBySkill(posts: Post[], search: string) {
   const q = search.trim().toLowerCase()
   return q ? posts.filter((p) => p.skills.toLowerCase().includes(q)) : posts
@@ -23,6 +56,17 @@ const FIELDS: [keyof typeof LIMITS, string][] = [
   ['note', 'Note'],
   ['contact', 'Contact'],
 ]
+
+/** Per-field problems for the post form. Empty when the post can be published. */
+export function fieldErrors(post: NewPost): Partial<Record<keyof NewPost, string>> {
+  const errors: Partial<Record<keyof NewPost, string>> = {}
+  if (!post.name.trim()) errors.name = 'Tell people your name'
+  if (!post.contact.trim()) errors.contact = 'Add a way to reach you'
+  for (const [key, label] of FIELDS) {
+    if (!errors[key] && post[key].length > LIMITS[key]) errors[key] = `${label} is too long (max ${LIMITS[key]} characters)`
+  }
+  return errors
+}
 
 /** Returns an error message, or null when the post can be published. */
 export function validatePost(post: NewPost): string | null {

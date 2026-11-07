@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { NewPost, Post } from './types'
 import { DEMO_POSTS } from './demoPosts'
-import { filterBySkill, filterPosts, mostWanted, short, timeLeft, validatePost } from './lib'
+import { ApiError } from './errors'
+import { fieldErrors, filterBySkill, friendlyError, filterPosts, mostWanted, short, timeLeft, validatePost } from './lib'
 
 const valid: NewPost = { role: 'frontend', lookingFor: 'contracts', name: 'Asha', skills: 'react', note: 'hi', contact: 'tg: @a' }
 const post = (skills: string) => ({ skills }) as Post
@@ -55,4 +56,35 @@ describe('mostWanted', () => {
     expect(mostWanted(DEMO_POSTS)).toBe('contracts')
   })
   it('returns null for no posts', () => expect(mostWanted([])).toBeNull())
+})
+
+describe('fieldErrors', () => {
+  it('is empty for a valid post', () => expect(fieldErrors(valid)).toEqual({}))
+  it('points at the field that is wrong', () => {
+    expect(Object.keys(fieldErrors({ ...valid, name: '', contact: ' ' }))).toEqual(['name', 'contact'])
+    expect(fieldErrors({ ...valid, note: 'a'.repeat(501) }).note).toMatch(/too long/)
+  })
+})
+
+describe('friendlyError', () => {
+  it('treats a rejected wallet prompt as a cancel, not a failure', () => {
+    expect(friendlyError({ code: 4001, message: 'User rejected the request.' }, 'published').cancelled).toBe(true)
+  })
+  it('explains an unreachable server', () => {
+    const r = friendlyError(new ApiError(0, 'Network error'), 'published')
+    expect(r.title).toMatch(/reach/)
+    expect(r.cancelled).toBe(false)
+  })
+  it('explains a missing API and a missing post differently', () => {
+    expect(friendlyError(new ApiError(404, 'x'), 'published').title).toBe('Server not available')
+    expect(friendlyError(new ApiError(404, 'x'), 'deleted').title).toBe('Post not found')
+  })
+  it('handles a bad signature and server errors', () => {
+    expect(friendlyError(new ApiError(401, 'Bad signature'), 'published').title).toBe('Signature not accepted')
+    expect(friendlyError(new ApiError(503, 'x'), 'published').title).toBe('Server problem')
+  })
+  it('handles a missing wallet and a busy wallet', () => {
+    expect(friendlyError(new Error('No wallet found. Install MetaMask'), 'published').title).toBe('No wallet found')
+    expect(friendlyError({ code: -32002, message: 'pending' }, 'published').title).toBe('Wallet is busy')
+  })
 })
