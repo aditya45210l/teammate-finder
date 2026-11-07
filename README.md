@@ -20,7 +20,8 @@ Pick one in the sidebar:
 - **Demo data**: sample posts in the browser only.
 
 ## Writer wallet
-TODO: paste the address printed by `npm run seed`.
+The seed script writes demo posts from `0xB055409516C3f78Ec57B8dd576fb5214aD57378E`.
+That wallet has no testnet funds yet, so no demo posts are on Arkiv at the time of writing. Fund it at https://hub.arkiv.network/faucet and run `npm run seed`.
 
 ## Example query
 ```ts
