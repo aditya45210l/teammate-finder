@@ -5,7 +5,7 @@ import {
 } from './components/pouf'
 import * as mongo from './mongo/api'
 import type { NewPost, Post } from './types'
-import { useEns } from './ens'
+import { contactFromRecords, isEnsName, resolveEnsName, useEns } from './ens'
 import { LIMITS, POST_LIFETIME_HOURS, ROLES } from '../shared/constants'
 import Landing from './Landing'
 import { DEMO_ME, DEMO_POSTS } from './demoPosts'
@@ -80,6 +80,7 @@ function Board({ onHome }: { onHome: () => void }) {
   const [saving, setSaving] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [attempted, setAttempted] = useState(false)
+  const [ensSearch, setEnsSearch] = useState<{ query: string; address: string | null } | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
 
   const [reload, setReload] = useState(0)
@@ -141,7 +142,24 @@ function Board({ onHome }: { onHome: () => void }) {
     return () => eth.removeListener?.('accountsChanged', onAccounts)
   }, [])
 
-  const visible = useMemo(() => filterBySkill(posts, search), [posts, search])
+  // Typing an ENS name searches for posts by that name's owner instead of by skill.
+  const ensQuery = isEnsName(search) ? search.trim().toLowerCase() : null
+  useEffect(() => {
+    if (!ensQuery) return
+    let stale = false
+    void resolveEnsName(ensQuery).then((address) => !stale && setEnsSearch({ query: ensQuery, address }))
+    return () => {
+      stale = true
+    }
+  }, [ensQuery])
+  const ensResolving = !!ensQuery && ensSearch?.query !== ensQuery
+
+  const visible = useMemo(() => {
+    if (!ensQuery) return filterBySkill(posts, search)
+    if (ensSearch?.query !== ensQuery) return posts
+    const owner = ensSearch.address?.toLowerCase()
+    return owner ? posts.filter((p) => p.author.toLowerCase() === owner) : []
+  }, [posts, search, ensQuery, ensSearch])
 
   const connect = async (): Promise<`0x${string}` | null> => {
     setConnecting(true)
@@ -177,7 +195,9 @@ function Board({ onHome }: { onHome: () => void }) {
   }
 
   const me = demo ? DEMO_ME : account
-  const ensName = useEns(account).name
+  const myEns = useEns(account)
+  const ensName = myEns.name
+  const ensContact = contactFromRecords(myEns.records)
 
   const closeDialog = (next: boolean) => {
     setOpen(next)
@@ -285,6 +305,11 @@ function Board({ onHome }: { onHome: () => void }) {
         <Field label="Contact" hint={`Telegram, email, etc. ${left('contact')}`} error={errors.contact}>
           {(id, d) => <Input id={id} describedBy={d} value={form.contact} onChange={set('contact')} maxLength={LIMITS.contact} invalid={!!errors.contact} />}
         </Field>
+        {ensContact && !form.contact && (
+          <Button variant="quiet" size="sm" onClick={() => set('contact')(ensContact)}>
+            Use contact from {ensName}
+          </Button>
+        )}
         <Button tone="mint" block loading={saving || connecting} onClick={submit}>
           {me ? (demo ? 'Add demo post' : 'Sign and publish') : 'Connect wallet and publish'}
         </Button>
@@ -346,8 +371,11 @@ function Board({ onHome }: { onHome: () => void }) {
                 <Field label="Posted by a">
                   {(id) => <Select id={id} value={role} onChange={setRole} options={filterOptions} />}
                 </Field>
-                <Field label="Skill search">
-                  {(id) => <Input id={id} value={search} onChange={setSearch} placeholder="e.g. solidity" />}
+                <Field
+                  label="Skill or ENS name"
+                  hint={ensResolving ? 'Looking up ENS name...' : ensQuery ? (ensSearch?.address ? `Posts by ${ensQuery}` : 'No address found for that ENS name') : 'Try solidity, or an ENS name like nick.eth'}
+                >
+                  {(id, d) => <Input id={id} describedBy={d} value={search} onChange={setSearch} placeholder="e.g. solidity or nick.eth" />}
                 </Field>
               </Stack>
             </Card>
@@ -449,6 +477,14 @@ function PostCard({ post: p, canDelete, deleting, onCopy, onDelete }: {
             {p.skills.split(',').map((k) => k.trim()).filter(Boolean).map((k) => (
               <Badge key={k} tone="mint">{k}</Badge>
             ))}
+          </Row>
+        )}
+        {Object.keys(ens.records).length > 0 && (
+          <Row gap={2}>
+            <Text size="sm" muted>ENS</Text>
+            {ens.records.github && <Badge tone="blue">github: {ens.records.github}</Badge>}
+            {ens.records.twitter && <Badge tone="blue">x: {ens.records.twitter}</Badge>}
+            {ens.records.telegram && <Badge tone="blue">tg: {ens.records.telegram}</Badge>}
           </Row>
         )}
         <Spacer />

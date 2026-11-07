@@ -11,7 +11,11 @@ Vite, React 19, TypeScript, Tailwind v4, and the [1st-Pouf](https://github.com/m
 - **Demo mode:** pick "Demo data" in the sidebar to try the UI with sample posts and no wallet or network.
 
 ## ENS
-Wallet addresses are shown as ENS names with avatars when one exists (`src/ens.ts`). The navbar shows your own ENS name once you connect, and each post card shows the author's name instead of a hex address. Lookups are read-only reverse resolution on Ethereum mainnet through viem, cached per address.
+ENS is used for identity throughout the app (`src/ens.ts`, read-only on Ethereum mainnet through viem, cached per address):
+- **Names and avatars:** the navbar shows your ENS name when you connect, and each post card shows the author's ENS name and avatar instead of a hex address.
+- **Text records:** an author's published GitHub, X and Telegram records appear on their card.
+- **Search by name:** type an ENS name such as `nick.eth` in the search box to see only posts by the wallet that owns it.
+- **Fill contact from ENS:** in the New post form, one click fills your contact from your ENS records (Telegram, then email, X, GitHub).
 
 ## Run
 ```bash
