@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Avatar, Badge, Blob, Button, Card, Confirm, Dialog, Empty, ErrorNote, Field, Grid, Heading, Input,
+  Avatar, Badge, Blob, Button, Card, Confirm, Dialog, DropdownMenu, Empty, ErrorNote, Field, Grid, Heading, Input,
   Navbar, Page, Row, Select, Separator, Sidebar, Split, Skeleton, Spacer, Stack, Stat, Text, Textarea, Toaster, TooltipProvider, toast,
 } from './components/pouf'
 import * as mongo from './mongo/api'
 import type { NewPost, Post } from './types'
-import { POST_LIFETIME_HOURS, ROLES } from '../shared/constants'
+import { LIMITS, POST_LIFETIME_HOURS, ROLES } from '../shared/constants'
 import Landing from './Landing'
 import { DEMO_ME, DEMO_POSTS } from './demoPosts'
-import { filterBySkill, filterPosts, message, mostWanted, short, timeLeft, validatePost } from './lib'
+import { fieldErrors, filterBySkill, filterPosts, friendlyError, mostWanted, short, timeLeft } from './lib'
 
 type Source = 'api' | 'demo'
 const SOURCE_OPTIONS = [
@@ -26,6 +26,21 @@ const filterOptions = [{ value: ANY, label: 'Anyone' }, ...roleOptions]
 const emptyForm: NewPost = { role: 'frontend', lookingFor: 'contracts', name: '', skills: '', note: '', contact: '' }
 
 
+const walletOff = () => {
+  try {
+    return localStorage.getItem('wallet') === 'off'
+  } catch {
+    return false
+  }
+}
+const setWalletOff = (off: boolean) => {
+  try {
+    localStorage.setItem('wallet', off ? 'off' : 'on')
+  } catch {
+    /* storage unavailable, the choice just won't persist */
+  }
+}
+
 export default function App() {
   const [view, setView] = useState<'landing' | 'app'>(location.hash === '#app' ? 'app' : 'landing')
   useEffect(() => {
@@ -38,10 +53,10 @@ export default function App() {
     setView(v)
     window.scrollTo(0, 0)
   }
-  return view === 'landing' ? <Landing onLaunch={() => go('app')} /> : <Board />
+  return view === 'landing' ? <Landing onLaunch={() => go('app')} /> : <Board onHome={() => go('landing')} />
 }
 
-function Board() {
+function Board({ onHome }: { onHome: () => void }) {
   const [account, setAccount] = useState<`0x${string}` | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
   const [source, setSource] = useState<Source>(() => {
@@ -62,6 +77,8 @@ function Board() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<NewPost>(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [connecting, setConnecting] = useState(false)
+  const [attempted, setAttempted] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
 
   const [reload, setReload] = useState(0)
@@ -93,7 +110,11 @@ function Board() {
         setPosts(result)
         setError(null)
       })
-      .catch((e) => !stale && setError(message(e)))
+      .catch((e) => {
+        if (stale) return
+        const f = friendlyError(e, 'loaded')
+        setError(`${f.title}. ${f.description}`)
+      })
       .finally(() => !stale && setLoading(false))
     return () => {
       stale = true
@@ -101,48 +122,93 @@ function Board() {
     }
   }, [need, role, reload, source, demoPosts, demo])
 
+  // Pick the wallet back up on reload, unless the person disconnected on purpose.
+  useEffect(() => {
+    if (walletOff()) return
+    void mongo.getConnectedAccount().then((a) => a && setAccount(a))
+  }, [])
+
   useEffect(() => {
     const eth = (window as unknown as { ethereum?: { on?: Function; removeListener?: Function } }).ethereum
     if (!eth?.on) return
-    const onAccounts = (accounts: `0x${string}`[]) => setAccount(accounts[0] ?? null)
+    const onAccounts = (accounts: `0x${string}`[]) => {
+      if (walletOff()) return
+      setAccount(accounts[0] ?? null)
+      if (!accounts[0]) toast.info('Wallet disconnected', { description: 'Your wallet no longer shares an account with this site.' })
+    }
     eth.on('accountsChanged', onAccounts)
     return () => eth.removeListener?.('accountsChanged', onAccounts)
   }, [])
 
   const visible = useMemo(() => filterBySkill(posts, search), [posts, search])
 
-  const connect = async () => {
+  const connect = async (): Promise<`0x${string}` | null> => {
+    setConnecting(true)
     try {
-      setAccount(await mongo.connectAccount())
-      toast.success('Wallet connected')
+      const a = await mongo.connectAccount()
+      setWalletOff(false)
+      setAccount(a)
+      toast.success('Wallet connected', { description: short(a) })
+      return a
     } catch (e) {
-      toast.error('Could not connect', { description: message(e) })
+      const f = friendlyError(e, 'connected')
+      ;(f.cancelled ? toast.info : toast.error)(f.title, { description: f.description })
+      return null
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  const disconnect = () => {
+    setWalletOff(true)
+    setAccount(null)
+    toast.info('Disconnected', { description: 'You can reconnect any time. To fully revoke access, use your wallet settings.' })
+  }
+
+  const copyAddress = async () => {
+    if (!account) return
+    try {
+      await navigator.clipboard.writeText(account)
+      toast.success('Address copied')
+    } catch {
+      toast.warning('Could not copy', { description: account })
     }
   }
 
   const me = demo ? DEMO_ME : account
 
+  const closeDialog = (next: boolean) => {
+    setOpen(next)
+    if (!next) setAttempted(false)
+  }
+
   const submit = async () => {
-    if (!me) return toast.warning('Connect your wallet first')
-    const problem = validatePost(form)
-    if (problem) return toast.warning(problem)
+    setAttempted(true)
+    if (Object.keys(fieldErrors(form)).length > 0) return
+    // Publishing needs a wallet, so offer the connection instead of just refusing.
+    const author = me ?? (await connect())
+    if (!author) return
+    const clean = { ...form, name: form.name.trim(), skills: form.skills.trim(), note: form.note.trim(), contact: form.contact.trim() }
     if (demo) {
-      const post: Post = { ...form, name: form.name.trim(), contact: form.contact.trim(), key: `0xdemo-${Date.now()}`, owner: me, author: me, secondsLeft: POST_LIFETIME_HOURS * 3600 }
+      const post: Post = { ...clean, key: `0xdemo-${Date.now()}`, owner: author, author, secondsLeft: POST_LIFETIME_HOURS * 3600 }
       setDemoPosts((list) => [post, ...list])
       toast.success('Demo post added', { description: 'Switch the data source to publish for real.' })
       setOpen(false)
+      setAttempted(false)
       setForm(emptyForm)
       return
     }
     setSaving(true)
     try {
-      await mongo.createPost(me!, { ...form, name: form.name.trim(), contact: form.contact.trim() })
+      await mongo.createPost(author, clean)
       toast.success('Post published', { description: `It disappears in ${POST_LIFETIME_HOURS}h.` })
       setOpen(false)
+      setAttempted(false)
       setForm(emptyForm)
       refresh()
     } catch (e) {
-      toast.error('Could not publish', { description: message(e) })
+      const f = friendlyError(e, 'published')
+      ;(f.cancelled ? toast.info : toast.error)(f.title, { description: f.description })
     } finally {
       setSaving(false)
     }
@@ -158,10 +224,12 @@ function Board() {
     setDeleting(post.key)
     try {
       await mongo.deletePost(me, post.key)
-      toast.success('Post deleted')
+      toast.success('Post deleted', { description: 'It is gone for everyone.' })
       refresh()
     } catch (e) {
-      toast.error('Could not delete', { description: message(e) })
+      const f = friendlyError(e, 'deleted')
+      ;(f.cancelled ? toast.info : toast.error)(f.title, { description: f.description })
+      if (!f.cancelled) refresh()
     } finally {
       setDeleting(null)
     }
@@ -187,28 +255,39 @@ function Board() {
     setSearch('')
   }
 
+  const errors = attempted ? fieldErrors(form) : {}
+  const left = (k: keyof typeof LIMITS) => `${form[k].length}/${LIMITS[k]}`
+
   const newPostDialog = (
-              <Dialog
-                open={open}
-                onOpenChange={setOpen}
-                title="New post"
-                description="Tell people who you are and who you need."
-                trigger={<Button tone="pink" size="sm">Post</Button>}
-              >
-                <Stack gap={4}>
-                  <Field label="Your name">{(id) => <Input id={id} value={form.name} onChange={set('name')} />}</Field>
-                  <Row gap={3} wrap={false}>
-                    <Field label="I am a">{(id) => <Select id={id} value={form.role} onChange={set('role')} options={roleOptions} />}</Field>
-                    <Field label="I need a">{(id) => <Select id={id} value={form.lookingFor} onChange={set('lookingFor')} options={roleOptions} />}</Field>
-                  </Row>
-                  <Field label="Skills" hint="Comma separated">{(id) => <Input id={id} value={form.skills} onChange={set('skills')} />}</Field>
-                  <Field label="Note">{(id) => <Textarea id={id} value={form.note} onChange={set('note')} rows={3} />}</Field>
-                  <Field label="Contact" hint="Telegram, email, etc.">{(id) => <Input id={id} value={form.contact} onChange={set('contact')} />}</Field>
-                  <Button tone="mint" block loading={saving} onClick={submit}>
-                    {me ? (demo ? 'Add demo post' : 'Publish') : 'Connect wallet to publish'}
-                  </Button>
-                </Stack>
-              </Dialog>
+    <Dialog
+      open={open}
+      onOpenChange={closeDialog}
+      title="New post"
+      description={demo ? 'Demo mode: this post stays in your browser.' : 'Tell people who you are and who you need. You will sign it with your wallet.'}
+      trigger={<Button tone="pink" size="sm">Post</Button>}
+    >
+      <Stack gap={4}>
+        <Field label="Your name" hint={left('name')} error={errors.name}>
+          {(id, d) => <Input id={id} describedBy={d} value={form.name} onChange={set('name')} maxLength={LIMITS.name} invalid={!!errors.name} />}
+        </Field>
+        <Row gap={3} wrap={false}>
+          <Field label="I am a">{(id) => <Select id={id} value={form.role} onChange={set('role')} options={roleOptions} />}</Field>
+          <Field label="I need a">{(id) => <Select id={id} value={form.lookingFor} onChange={set('lookingFor')} options={roleOptions} />}</Field>
+        </Row>
+        <Field label="Skills" hint={`Comma separated. ${left('skills')}`} error={errors.skills}>
+          {(id, d) => <Input id={id} describedBy={d} value={form.skills} onChange={set('skills')} maxLength={LIMITS.skills} invalid={!!errors.skills} />}
+        </Field>
+        <Field label="Note" hint={left('note')} error={errors.note}>
+          {(id, d) => <Textarea id={id} describedBy={d} value={form.note} onChange={set('note')} rows={3} maxLength={LIMITS.note} invalid={!!errors.note} />}
+        </Field>
+        <Field label="Contact" hint={`Telegram, email, etc. ${left('contact')}`} error={errors.contact}>
+          {(id, d) => <Input id={id} describedBy={d} value={form.contact} onChange={set('contact')} maxLength={LIMITS.contact} invalid={!!errors.contact} />}
+        </Field>
+        <Button tone="mint" block loading={saving || connecting} onClick={submit}>
+          {me ? (demo ? 'Add demo post' : 'Sign and publish') : 'Connect wallet and publish'}
+        </Button>
+      </Stack>
+    </Dialog>
   )
 
   return (
@@ -217,23 +296,39 @@ function Board() {
       <Stack gap={5}>
       <Navbar
         brand={<><Blob icon="users" tone="purple" size="sm" />Teamfinder</>}
-        links={[{ label: 'Home', href: '/' }, { label: 'Board', href: '#app', active: true }]}
-        actions={newPostDialog}
+        actions={
+          <Row gap={2} wrap={false}>
+            {demo ? (
+              <Badge tone="yellow">Demo</Badge>
+            ) : account ? (
+              <DropdownMenu
+                label="Wallet menu"
+                items={[
+                  { label: 'Copy address', icon: 'card', onClick: copyAddress },
+                  'separator',
+                  { label: 'Disconnect', icon: 'off', tone: 'down', onClick: disconnect },
+                ]}
+              >
+                <Button variant="quiet" size="sm">
+                  <Badge tone="mint">{short(account)}</Badge>
+                </Button>
+              </DropdownMenu>
+            ) : (
+              <Button variant="quiet" size="sm" loading={connecting} onClick={connect}>Connect</Button>
+            )}
+            {newPostDialog}
+          </Row>
+        }
       />
       <Split>
         <Sidebar>
           <Stack gap={5}>
+            <Button variant="quiet" size="sm" block onClick={onHome}>← Back to home</Button>
             <Card variant="tight">
               <Stack gap={3}>
                 <Text size="sm" muted>Where posts come from</Text>
                 <Select value={source} onChange={changeSource} options={SOURCE_OPTIONS} label="Data source" />
                 <Text size="sm" muted>{SOURCE_HINT[source]}</Text>
-                {!demo &&
-                  (account ? (
-                    <Badge tone="mint">{short(account)}</Badge>
-                  ) : (
-                    <Button tone="purple" size="sm" block onClick={connect}>Connect wallet</Button>
-                  ))}
               </Stack>
             </Card>
 
@@ -275,7 +370,15 @@ function Board() {
             <Stat label="Expiring in 3h" value={String(expiringSoon)} icon="clock" tone="yellow" />
           </Grid>
 
-          {error && <ErrorNote>{error}</ErrorNote>}
+          {error && (
+            <ErrorNote>
+              <Row gap={3}>
+                <Text>{error}</Text>
+                <Button size="sm" variant="quiet" onClick={refresh}>Try again</Button>
+                <Button size="sm" variant="quiet" onClick={() => changeSource('demo')}>Use demo data</Button>
+              </Row>
+            </ErrorNote>
+          )}
           {loading ? (
             <Grid cols={2} gap={4}>
               <Skeleton variant="card" count={2} />

@@ -1,15 +1,22 @@
 import { createWalletClient, custom, type Address } from 'viem'
 import { createMessage, deleteMessage } from '../../shared/auth'
+import { ApiError } from '../errors'
 import type { Filters, NewPost, Post } from '../types'
 
 type Ethereum = { request(args: { method: string; params?: unknown[] }): Promise<unknown> }
 const ethereum = () => (window as unknown as { ethereum?: Ethereum }).ethereum
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, { ...init, headers: { 'Content-Type': 'application/json' } })
+  let res: Response
+  try {
+    res = await fetch(`/api${path}`, { ...init, headers: { 'Content-Type': 'application/json' } })
+  } catch {
+    throw new ApiError(0, 'Network error')
+  }
   if (res.status === 204) return undefined as T
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`)
+  // A missing API on the host returns an HTML page, not JSON.
+  const data = await res.json().catch(() => null)
+  if (!res.ok) throw new ApiError(res.status, data?.error ?? `Request failed (${res.status})`)
   return data as T
 }
 
@@ -19,6 +26,18 @@ export function listPosts({ need, role }: Filters = {}): Promise<Post[]> {
   if (role) params.set('role', role)
   const qs = params.toString()
   return call<Post[]>(`/posts${qs ? `?${qs}` : ''}`)
+}
+
+/** The account the wallet already shares with this site, without opening a prompt. */
+export async function getConnectedAccount(): Promise<Address | null> {
+  const eth = ethereum()
+  if (!eth) return null
+  try {
+    const [account] = (await eth.request({ method: 'eth_accounts' })) as Address[]
+    return account ?? null
+  } catch {
+    return null
+  }
 }
 
 /** Plain account connection: posts are signed messages, so no chain switch is needed. */

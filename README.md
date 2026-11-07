@@ -22,5 +22,13 @@ npm test
 
 For one process in production, `npm start` builds the front end and the API serves it from `dist/`.
 
+## Deploy on Vercel
+`api/index.ts` runs the Express API as a serverless function and `vercel.json` routes `/api/*` to it, so one Vercel project serves both the site and the API.
+1. In the Vercel project, set the environment variable `MONGODB_URI` (same value as your `.env`).
+2. In MongoDB Atlas, allow Vercel to connect: Network Access, add `0.0.0.0/0` (Vercel has no fixed IP).
+3. Redeploy.
+
+If the board shows "Server not available", the function is missing or `MONGODB_URI` is not set.
+
 ## AI usage
 Built with Claude Code.

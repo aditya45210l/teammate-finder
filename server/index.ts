@@ -4,8 +4,8 @@ import express from 'express'
 import path from 'node:path'
 import { MongoClient, ObjectId, type Collection } from 'mongodb'
 import { isAddress, verifyMessage, type Hex } from 'viem'
-import { AUTH_WINDOW_MS, createMessage, deleteMessage } from '../shared/auth'
-import { LIMITS, POST_LIFETIME_HOURS, ROLES } from '../shared/constants'
+import { AUTH_WINDOW_MS, createMessage, deleteMessage } from '../shared/auth.js'
+import { LIMITS, POST_LIFETIME_HOURS, ROLES } from '../shared/constants.js'
 
 export interface PostDoc {
   author: string
@@ -100,10 +100,12 @@ export function createApp(posts: Collection<PostDoc>) {
     res.status(204).end()
   })
 
-  // In production the same process serves the built front end.
-  const dist = path.resolve(import.meta.dirname, '../dist')
-  app.use(express.static(dist))
-  app.get(/^\/(?!api\/).*/, (_req, res, next) => res.sendFile(path.join(dist, 'index.html'), (err) => err && next()))
+  // Outside Vercel the same process serves the built front end. On Vercel the platform serves static files itself.
+  if (!process.env.VERCEL) {
+    const dist = path.resolve(import.meta.dirname, '../dist')
+    app.use(express.static(dist))
+    app.get(/^\/(?!api\/).*/, (_req, res, next) => res.sendFile(path.join(dist, 'index.html'), (err) => err && next()))
+  }
 
   return app
 }
